@@ -23,29 +23,42 @@ function createContentPersistence(context) {
     if (metadata && metadata.copyFormat) {
       entry.copyFormat = metadata.copyFormat;
     }
-    const backgroundSaved = await saveHistoryThroughBackground(entry);
-    if (!backgroundSaved && utils.isExtensionContextValid()) {
-      console.warn("Saving copy history through the background service worker failed.");
+    const failure = await saveHistoryThroughBackground(entry);
+    if (failure && utils.isExtensionContextValid()) {
+      console.warn("Saving copy history through the background service worker failed:", failure);
     }
   }
 
+  // Returns "" on success, otherwise the failure reason.
   async function saveHistoryThroughBackground(entry) {
     if (!utils.isExtensionContextValid() || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") {
-      return false;
+      return "extension-context-unavailable";
     }
 
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: "COPY_TEXT_LOCAL_HISTORY_ADD",
-        payload: {
-          entry: entry,
-          limit: settings().copyHistoryLimit,
-        },
-      });
-      return !!(response && response.ok);
-    } catch (error) {
-      return false;
+    const message = {
+      type: "COPY_TEXT_LOCAL_HISTORY_ADD",
+      payload: {
+        entry: entry,
+        limit: settings().copyHistoryLimit,
+      },
+    };
+    let lastError = null;
+    // A waking or restarting service worker can drop the first message, so retry once.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const response = await chrome.runtime.sendMessage(message);
+        if (response && response.ok) {
+          return "";
+        }
+        return (response && response.error && response.error.message) || "no-response";
+      } catch (error) {
+        if (utils.isExtensionContextInvalidatedError(error)) {
+          return "extension-context-invalidated";
+        }
+        lastError = error;
+      }
     }
+    return (lastError && lastError.message) || String(lastError);
   }
 
   async function saveAnalyticsEvent(event) {
