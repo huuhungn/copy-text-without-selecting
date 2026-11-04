@@ -218,6 +218,78 @@ test("rich clipboard failure falls back to writeText exactly once", async functi
   }
 });
 
+test("content history retries once when the service worker drops the first message", async function () {
+  let attempts = 0;
+  const restoreChrome = replaceGlobal("chrome", {
+    runtime: {
+      id: "test-extension",
+      sendMessage: async function () {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("Could not establish connection. Receiving end does not exist.");
+        }
+        return { ok: true };
+      },
+    },
+  });
+  const restoreWindow = replaceGlobal("window", {
+    location: { href: "https://example.com/page", hostname: "example.com" },
+  });
+  const persistence = createContentPersistence({
+    utils: core,
+    state: { settings: core.mergeSettings() },
+    handleExtensionContextError: function () { return false; },
+  });
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = function () { warnings.push(Array.from(arguments)); };
+
+  try {
+    await persistence.saveHistory("text", "copied", "click", false);
+    assert.equal(attempts, 2);
+    assert.equal(warnings.length, 0);
+  } finally {
+    console.warn = originalWarn;
+    restoreWindow();
+    restoreChrome();
+  }
+});
+
+test("content history warning includes the background failure reason", async function () {
+  let attempts = 0;
+  const restoreChrome = replaceGlobal("chrome", {
+    runtime: {
+      id: "test-extension",
+      sendMessage: async function () {
+        attempts += 1;
+        return { ok: false, error: { message: "QUOTA_BYTES quota exceeded" } };
+      },
+    },
+  });
+  const restoreWindow = replaceGlobal("window", {
+    location: { href: "https://example.com/page", hostname: "example.com" },
+  });
+  const persistence = createContentPersistence({
+    utils: core,
+    state: { settings: core.mergeSettings() },
+    handleExtensionContextError: function () { return false; },
+  });
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = function () { warnings.push(Array.from(arguments)); };
+
+  try {
+    await persistence.saveHistory("text", "copied", "click", false);
+    assert.equal(attempts, 1);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0][1], "QUOTA_BYTES quota exceeded");
+  } finally {
+    console.warn = originalWarn;
+    restoreWindow();
+    restoreChrome();
+  }
+});
+
 test("content history forwards optional target and link format metadata", async function () {
   let sentMessage;
   const restoreChrome = replaceGlobal("chrome", {
