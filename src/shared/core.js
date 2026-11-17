@@ -33,7 +33,7 @@ var DEFAULT_SETTINGS = {
         lastUpdatedAt: 0
     };
 
-    var SUPPORTED_META_KEYS = ["Alt", "Ctrl", "Shift"];
+    var SUPPORTED_META_KEYS = ["Alt", "Ctrl", "Shift", "AltCtrl", "CtrlShift", "ShiftAlt", "CtrlShiftAlt"];
     var SUPPORTED_UI_LANGUAGES = ["auto", "en", "vi"];
     var SUPPORTED_LINK_COPY_FORMATS = ["markdown", "text", "url"];
     var SUPPORTED_HISTORY_TARGET_KINDS = ["action", "code", "control", "image", "link", "list", "scope", "selection", "table", "text"];
@@ -177,6 +177,10 @@ var DEFAULT_SETTINGS = {
             case "Alt": return !!event.altKey;
             case "Ctrl": return !!event.ctrlKey;
             case "Shift": return !!event.shiftKey;
+            case "AltCtrl": return !!event.altKey && !!event.ctrlKey;
+            case "CtrlShift": return !!event.ctrlKey && !!event.shiftKey;
+            case "ShiftAlt": return !!event.shiftKey && !!event.altKey;
+            case "CtrlShiftAlt": return !!event.ctrlKey && !!event.shiftKey && !!event.altKey;
             default: return false;
         }
     }

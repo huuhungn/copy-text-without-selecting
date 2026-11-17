@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copy Extension Fixture - Iframe</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 40px auto;
+            max-width: 900px;
+            padding: 0 20px 80px;
+        }
+        iframe {
+            width: 100%;
+            height: 420px;
+            border: 1px solid #dbe4ee;
+        }
+    </style>
+</head>
+<body>
+    <h1>Iframe copy scenarios</h1>
+    <p id="outer-text">Outer page paragraph that is not inside the frame.</p>
+    <iframe id="inner-frame" src="iframe-inner.html" allow="clipboard-write" title="Embedded basic fixture"></iframe>
+</body>
+</html>

@@ -300,6 +300,38 @@ test("copies basic paragraph text", async function () {
   await page.close();
 });
 
+test("copies text inside a same-origin iframe and records one history entry", async function () {
+  const historyBefore = (await readHistoryEntries()).length;
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  const frame = page.frameLocator("#inner-frame");
+  await altClick(frame.locator("#frame-text"));
+  await expect.poll(async function () {
+    return readClipboard(page);
+  }).toContain("Embedded frame paragraph");
+  await expect.poll(async function () {
+    return (await readHistoryEntries()).length;
+  }).toBe(historyBefore + 1);
+  await page.waitForTimeout(500);
+  expect((await readHistoryEntries()).length).toBe(historyBefore + 1);
+  await page.close();
+});
+
+test("copies text inside a cross-origin iframe", async function () {
+  const crossOrigin = baseUrl.replace(HOST, "localhost");
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: crossOrigin });
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await page.evaluate(function (src) {
+    document.getElementById("inner-frame").src = src;
+  }, `${crossOrigin}/fixtures/iframe-inner.html`);
+  const frame = page.frameLocator("#inner-frame");
+  await expect(frame.locator("#frame-text")).toBeVisible();
+  await altClick(frame.locator("#frame-text"));
+  await expect.poll(async function () {
+    return readClipboard(page);
+  }).toContain("Embedded frame paragraph");
+  await page.close();
+});
+
 test("copies rich targets from the basic fixture", async function () {
   await updateSyncSettings({ avoidEditable: false });
   const { page } = await openPage("fixtures/basic-copy.html");
@@ -987,6 +1019,28 @@ test("copies hovered paragraph through the shortcut message path", async functio
     return readClipboard(page);
   }).toContain("Hover this paragraph");
   await page.close();
+});
+
+test("copies with a combined Alt+Ctrl modifier but not with Alt alone", async function () {
+  await updateSyncSettings({ metaKey: "AltCtrl" });
+  await waitForSyncSetting("metaKey", "AltCtrl");
+  try {
+    const { page } = await openPage("fixtures/basic-copy.html");
+    await page.evaluate(function () {
+      return navigator.clipboard.writeText("sentinel");
+    });
+    await page.locator("#plain-text").click({ modifiers: ["Alt"] });
+    await page.waitForTimeout(500);
+    expect(await readClipboard(page)).toBe("sentinel");
+    await page.locator("#plain-text").click({ modifiers: ["Alt", "Control"] });
+    await expect.poll(async function () {
+      return readClipboard(page);
+    }).toContain("Copying this paragraph should capture");
+    await page.close();
+  } finally {
+    await updateSyncSettings({ metaKey: "Alt" });
+    await waitForSyncSetting("metaKey", "Alt");
+  }
 });
 
 test("saves popup and link format settings with excluded domains roundtrip", async function () {

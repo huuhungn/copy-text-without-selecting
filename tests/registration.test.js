@@ -45,6 +45,7 @@ test("content registration updates in place with normalized exclude matches", as
       "*://*.example.com/*",
     ]);
     assert.equal(unregisterCalls, 0);
+    assert.equal(definition.allFrames, true);
   } finally {
     global.chrome = originalChrome;
   }
