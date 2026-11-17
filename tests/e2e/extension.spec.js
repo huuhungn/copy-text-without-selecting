@@ -187,6 +187,48 @@ async function readHistoryEntries() {
   return entries;
 }
 
+async function getServiceWorker() {
+  return context.serviceWorkers()[0] || context.waitForEvent("serviceworker");
+}
+
+// Sends the shortcut message the way the background does: to every frame of the tab, without a frameId.
+async function pressShortcut(pageUrlPart) {
+  const serviceWorker = await getServiceWorker();
+  return serviceWorker.evaluate(async function (urlPart) {
+    const tabs = await chrome.tabs.query({});
+    const targetTab = tabs.find(function (tab) {
+      return typeof tab.url === "string" && tab.url.includes(urlPart);
+    });
+    return chrome.tabs.sendMessage(targetTab.id, { type: "COPY_TEXT_WITHOUT_SELECTING_SHORTCUT" });
+  }, pageUrlPart);
+}
+
+async function readStatusToastCount() {
+  const serviceWorker = await getServiceWorker();
+  return serviceWorker.evaluate(async function () {
+    const items = await chrome.storage.local.get({ copyAnalytics: null });
+    const counts = items.copyAnalytics && items.copyAnalytics.toastCounts;
+    return counts && counts.status ? counts.status : 0;
+  });
+}
+
+async function readHistoryTexts() {
+  const serviceWorker = await getServiceWorker();
+  return serviceWorker.evaluate(async function () {
+    const items = await chrome.storage.local.get({ copyHistory: [] });
+    return (items.copyHistory || []).map(function (entry) {
+      return entry.text;
+    });
+  });
+}
+
+async function clearHistory() {
+  const serviceWorker = await getServiceWorker();
+  await serviceWorker.evaluate(function () {
+    return chrome.storage.local.set({ copyHistory: [] });
+  });
+}
+
 async function withFreshExtensionContext(callback) {
   await closeExtensionContext();
   await launchExtensionContext();
@@ -1018,6 +1060,115 @@ test("copies hovered paragraph through the shortcut message path", async functio
   await expect.poll(async function () {
     return readClipboard(page);
   }).toContain("Hover this paragraph");
+  await page.close();
+});
+
+const FRAME_TEXT = "Embedded frame paragraph that only exists inside the iframe fixture.";
+const OUTER_TEXT = "Outer page paragraph that is not inside the frame.";
+
+test("shortcut in a top-only page copies the hovered paragraph once", async function () {
+  const { page } = await openPage("fixtures/basic-copy.html");
+  await clearHistory();
+  await page.locator("#plain-text").hover();
+  expect((await pressShortcut("/fixtures/basic-copy.html")).copied).toBe(true);
+  await page.waitForTimeout(500);
+  const texts = await readHistoryTexts();
+  expect(texts).toHaveLength(1);
+  expect(texts[0]).toContain("Copying this paragraph should capture");
+  expect(await readClipboard(page)).toContain("Copying this paragraph should capture");
+  await page.close();
+});
+
+test("shortcut with focus inside an iframe copies the iframe text once, not the iframe element", async function () {
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await clearHistory();
+  await page.frameLocator("#inner-frame").locator("#frame-text").click();
+  await pressShortcut("/fixtures/iframe-copy.html");
+  await page.waitForTimeout(500);
+  expect(await readHistoryTexts()).toEqual([FRAME_TEXT]);
+  expect(await readClipboard(page)).toBe(FRAME_TEXT);
+  await page.close();
+});
+
+test("shortcut with the pointer over an iframe and focus in the top frame copies the iframe text once", async function () {
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await clearHistory();
+  await page.frameLocator("#inner-frame").locator("#frame-text").hover();
+  await pressShortcut("/fixtures/iframe-copy.html");
+  await page.waitForTimeout(500);
+  expect(await readHistoryTexts()).toEqual([FRAME_TEXT]);
+  expect(await readClipboard(page)).toBe(FRAME_TEXT);
+  await page.close();
+});
+
+test("shortcut ignores a stale selection left in an iframe while the user works in the top frame", async function () {
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await clearHistory();
+  await page.frameLocator("#inner-frame").locator("#frame-text").evaluate(function (element) {
+    window.getSelection().selectAllChildren(element);
+  });
+  await page.locator("h1").click();
+  await page.locator("#outer-text").hover();
+  await pressShortcut("/fixtures/iframe-copy.html");
+  await page.waitForTimeout(500);
+  expect(await readHistoryTexts()).toEqual([OUTER_TEXT]);
+  expect(await readClipboard(page)).toBe(OUTER_TEXT);
+  await page.close();
+});
+
+test("shortcut copies the top paragraph after focus was in an iframe and the pointer moved out of it", async function () {
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await clearHistory();
+  await page.frameLocator("#inner-frame").locator("#frame-text").click();
+  await page.locator("#outer-text").hover();
+  await pressShortcut("/fixtures/iframe-copy.html");
+  await page.waitForTimeout(500);
+  expect(await readHistoryTexts()).toEqual([OUTER_TEXT]);
+  expect(await readClipboard(page)).toBe(OUTER_TEXT);
+  await page.close();
+});
+
+test("shortcut with focus inside a cross-origin iframe copies the iframe text once", async function () {
+  const crossOrigin = baseUrl.replace(HOST, "localhost");
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: crossOrigin });
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await page.evaluate(function (src) {
+    document.getElementById("inner-frame").src = src;
+  }, `${crossOrigin}/fixtures/iframe-inner.html`);
+  await clearHistory();
+  const toastsBefore = await readStatusToastCount();
+  await page.frameLocator("#inner-frame").locator("#frame-text").click();
+  await pressShortcut("/fixtures/iframe-copy.html");
+  await page.waitForTimeout(500);
+  expect(await readHistoryTexts()).toEqual([FRAME_TEXT]);
+  expect(await readClipboard(page)).toBe(FRAME_TEXT);
+  expect(await readStatusToastCount()).toBe(toastsBefore);
+  await page.close();
+});
+
+test("shortcut ignores a stale selection in the top frame while focus is inside an iframe", async function () {
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await clearHistory();
+  await page.locator("#outer-text").evaluate(function (element) {
+    window.getSelection().selectAllChildren(element);
+  });
+  await page.frameLocator("#inner-frame").locator("#frame-text").click();
+  await pressShortcut("/fixtures/iframe-copy.html");
+  await page.waitForTimeout(500);
+  expect(await readHistoryTexts()).toEqual([FRAME_TEXT]);
+  expect(await readClipboard(page)).toBe(FRAME_TEXT);
+  await page.close();
+});
+
+test("shortcut shows the no-target toast once when no frame has a target", async function () {
+  const { page } = await openPage("fixtures/iframe-copy.html");
+  await clearHistory();
+  const toastsBefore = await readStatusToastCount();
+  const response = await pressShortcut("/fixtures/iframe-copy.html");
+  expect(response.reason).toBe("no-target");
+  await page.waitForTimeout(500);
+  expect(await readStatusToastCount()).toBe(toastsBefore + 1);
+  expect(await readHistoryTexts()).toEqual([]);
   await page.close();
 });
 

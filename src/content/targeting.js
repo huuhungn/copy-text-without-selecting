@@ -806,20 +806,24 @@ function createContentTargeting(context, dependencies) {
   }
 
   function resolveShortcutTarget() {
+    // Selection and focus count only in the frame the user is in: not when a child frame holds
+    // focus, and not in a subframe without focus (its selection is stale).
+    const activeElement = getDeepActiveElement(document);
+    const ownsFocus = (window === window.top || document.hasFocus()) && !isFrameElement(activeElement);
+
     const selection = window.getSelection ? window.getSelection() : null;
-    if (selection && selection.rangeCount && !selection.isCollapsed && String(selection.toString() || "").trim()) {
+    if (ownsFocus && selection && selection.rangeCount && !selection.isCollapsed && String(selection.toString() || "").trim()) {
       return selection.anchorNode || selection.getRangeAt(0).commonAncestorContainer;
     }
 
-    const activeElement = getDeepActiveElement(document);
-    if (activeElement && (activeElement.nodeName == "INPUT" || activeElement.nodeName == "TEXTAREA")) {
+    if (ownsFocus && activeElement && (activeElement.nodeName == "INPUT" || activeElement.nodeName == "TEXTAREA")) {
       const start = typeof activeElement.selectionStart == "number" ? activeElement.selectionStart : 0;
       const end = typeof activeElement.selectionEnd == "number" ? activeElement.selectionEnd : 0;
       if (end > start) {
         return activeElement;
       }
     }
-    if (activeElement && activeElement !== document.body && activeElement !== document.documentElement) {
+    if (ownsFocus && activeElement && activeElement !== document.body && activeElement !== document.documentElement) {
       return activeElement;
     }
 
@@ -827,7 +831,12 @@ function createContentTargeting(context, dependencies) {
       return hoverState.hoveredElement;
     }
 
-    return null;
+    // Focus is inside this frame element: the shortcut handler defers to the frame it holds.
+    return isFrameElement(activeElement) ? activeElement : null;
+  }
+
+  function isFrameElement(element) {
+    return !!element && (element.nodeName == "IFRAME" || element.nodeName == "FRAME");
   }
 
   function getDeepActiveElement(root) {
@@ -901,6 +910,7 @@ function createContentTargeting(context, dependencies) {
     doTextSlicesContain,
     resetScopeState,
     resolveShortcutTarget,
+    isFrameElement,
     getDeepActiveElement,
     getNativeCopiedText,
     getElementNode,
