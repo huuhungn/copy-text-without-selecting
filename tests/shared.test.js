@@ -75,6 +75,19 @@ test("getCopyMode returns copy when the configured modifier is held", function (
   assert.equal(utils.getCopyMode("Ctrl", { ctrlKey: false, shiftKey: false }), null);
 });
 
+test("combined modifiers need every key held", function () {
+  assert.equal(utils.getCopyMode("AltCtrl", { altKey: true, ctrlKey: true }), "copy");
+  assert.equal(utils.getCopyMode("AltCtrl", { altKey: true, ctrlKey: false }), null);
+  assert.equal(utils.getCopyMode("CtrlShift", { ctrlKey: true, shiftKey: true }), "copy");
+  assert.equal(utils.getCopyMode("CtrlShift", { ctrlKey: true, shiftKey: false }), null);
+  assert.equal(utils.getCopyMode("ShiftAlt", { shiftKey: true, altKey: true }), "copy");
+  assert.equal(utils.getCopyMode("ShiftAlt", { shiftKey: false, altKey: true }), null);
+  assert.equal(utils.getCopyMode("CtrlShiftAlt", { ctrlKey: true, shiftKey: true, altKey: true }), "copy");
+  assert.equal(utils.getCopyMode("CtrlShiftAlt", { ctrlKey: true, shiftKey: true, altKey: false }), null);
+  assert.equal(utils.mergeSettings({ metaKey: "CtrlShiftAlt" }).metaKey, "CtrlShiftAlt");
+  assert.equal(utils.mergeSettings({ metaKey: "AltAlt" }).metaKey, "Alt");
+});
+
 test("toggleDomain adds and removes normalized hostnames", function () {
   assert.deepEqual(utils.toggleDomain([], "https://docs.google.com"), ["docs.google.com"]);
   assert.deepEqual(utils.toggleDomain(["docs.google.com"], "docs.google.com"), []);

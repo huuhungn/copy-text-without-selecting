@@ -17,7 +17,7 @@ function createPopupHistoryView(context) {
 
       const hint = document.createElement("div");
       hint.className = "empty-state-hint";
-      hint.textContent = context.ui.t("popup_history_onboarding", "Hold " + (context.getSettings().metaKey || "Alt") + " + Click any text to copy it.");
+      hint.textContent = context.ui.t("popup_history_onboarding", "Hold " + (context.getSettings().metaKey || "Alt").replace(/([a-z])(?=[A-Z])/g, "$1 + ") + " + Click any text to copy it.");
 
       empty.appendChild(icon);
       empty.appendChild(text);

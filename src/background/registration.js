@@ -23,6 +23,7 @@ async function syncContentScriptRegistration(utils, settings, contentScriptId) {
     excludeMatches: utils.buildExcludeMatches(settings.excludedDomains),
     js: ["shared.js", "menu.js"],
     runAt: "document_start",
+    allFrames: true,
     persistAcrossSessions: true,
   };
   const registered = await utils.safeChromeAsync(function () {
@@ -51,7 +52,7 @@ async function injectContentScriptsIntoOpenTabs(utils, settings) {
 
     try {
       await utils.safeExecuteScript({
-        target: { tabId: tab.id },
+        target: { tabId: tab.id, allFrames: true },
         files: ["shared.js", "menu.js"],
       });
     } catch (error) {

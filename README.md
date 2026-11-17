@@ -60,7 +60,7 @@ The clicked text is copied immediately without manual selection in the common ca
 
 ## Settings
 
-- **Copy modifier**: `Alt`, `Ctrl`, or `Shift`
+- **Copy modifier**: `Alt`, `Ctrl`, `Shift`, or a combination such as `Alt + Ctrl`
 - **Link copy format**: `Markdown` (default), visible `Text`, or resolved `URL`
 - **Hover preview**: toggles the dashed target overlay
 - **Skip editable apps**: avoids contenteditable editors and rich text surfaces

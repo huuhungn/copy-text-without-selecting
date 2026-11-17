@@ -99,6 +99,10 @@
     }
 
     const shortcutTarget = helpers.resolveShortcutTarget();
+    if (!shortcutTarget && window !== window.top) {
+      // Every frame receives the shortcut message; only the top frame reports "no target".
+      return false;
+    }
     if (!shortcutTarget) {
       helpers.saveAnalyticsEvent({
         toastKind: "status",
