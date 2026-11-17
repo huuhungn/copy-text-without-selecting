@@ -103,6 +103,10 @@
       // Every frame receives the shortcut message; only the top frame reports "no target".
       return false;
     }
+    if (helpers.isFrameElement(shortcutTarget)) {
+      // The frame inside it handles the shortcut, so it is not copied twice.
+      return false;
+    }
     if (!shortcutTarget) {
       helpers.saveAnalyticsEvent({
         toastKind: "status",
